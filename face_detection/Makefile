@@ -1,15 +1,7 @@
 CXX=g++
 CXXFLAGS= \
 	-O2 \
-	$(INCLUDES) \
 
-LDFLAGS= -L ./build/lib -Wl,-R ./build/lib \
-
-INCLUDE_DIRS= \
-	$(wildcard ./opencv-master/modules/*/include) \
-	./build \
-
-INCLUDES=$(INCLUDE_DIRS:%=-I %)
 LIBS= \
 	-lopencv_core \
 	-lopencv_highgui \
@@ -30,7 +22,7 @@ OBJ:=$(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 # $^ evaluates to all prerequisite (e.g. src files and include files)
 
 detection: $(OBJ)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) $^ -o $(OUT_DIR)/detection $(LIBS)
+	$(CXX) $(CXXFLAGS) $^ -o $(OUT_DIR)/detection $(LIBS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@

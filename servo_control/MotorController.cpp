@@ -21,7 +21,11 @@ MotorController::MotorController(Chip *chip, int channel, int init_angle)
         set_angle(init_angle);
 }
 
-void MotorController::set_angle(int angle) {
+double MotorController::get_angle() const {
+    return curr_angle;
+}
+
+void MotorController::set_angle(double angle) {
     // Write values to PWM registers
     // The chip has a PWM frequency of 200Hz (5ms per pulse).
     // The 4095 divides that 5ms into slices (1.2us per slice).
@@ -35,7 +39,7 @@ void MotorController::set_angle(int angle) {
 
     // Don't allow rotations near the min/max by this amount (just to be safe).
     static const int margin = 75;
-    int stop_time = min + ((max - min) * angle / 180);
+    int stop_time = min + ((max - min) * angle / 180.0);
 
     std::cout << "Stop time: " << stop_time << std::endl;
 
@@ -55,4 +59,6 @@ void MotorController::set_angle(int angle) {
     buffer[1] = stop_time & 0xff; // Low bytes first
     buffer[2] = (stop_time >> 8) & 0xff;
     chip->write_buffer(buffer, length);
+
+    curr_angle = angle;
 }

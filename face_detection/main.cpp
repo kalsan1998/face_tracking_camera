@@ -9,9 +9,9 @@
 #include <opencv2/objdetect.hpp>
 #include <opencv2/videoio.hpp>
 
-static const std::string FRONT_FACE_CLASSIFIER_DATA = "./classifiers/frontal_face.xml";
+#include "FaceDetector.h"
 
-static const std::string SIDE_FACE_CLASSIFIER_DATA = "./classifiers/side_face.xml";
+static const double BOUNDARY_MARGIN = 0.1;
 
 cv::Rect create_boundary(const cv::Mat &frame, double margin) {
     int rows = frame.rows;
@@ -30,59 +30,32 @@ int main() {
     cv::VideoCapture capture;
     cv::Mat frame;
 
-    cv::CascadeClassifier front_face_cascade, side_face_cascade;
-    front_face_cascade.load(FRONT_FACE_CLASSIFIER_DATA);
-    side_face_cascade.load(SIDE_FACE_CLASSIFIER_DATA);
     capture.open(0);
+    capture.set(cv::CAP_PROP_FPS, 3);
 
     capture >> frame;
-    static const double boundary_margin = 0.1;
-    const cv::Rect boundary = create_boundary(frame, boundary_margin);
+    const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
 
-    const int y_axis = frame.cols / 2;
+    FaceDetector face_detector;
 
     if (capture.isOpened()) {
         std::cout << "Starting video... " << std::endl;
         while (true) {
             capture >> frame;
-            if (frame.empty()) {
-                std::cout << "Detected empty frame" << std::endl;
-                break;
-            }
+
+            cv::Mat gray_frame;
+            cv::cvtColor(frame, gray_frame, cv::COLOR_BGR2GRAY);
+
+            std::vector<cv::Rect> faces = face_detector.process_frame(gray_frame);
             
             // TODO: Track largest face
 
-            cv::Mat gray;
-            cv::cvtColor(frame, gray, cv::COLOR_BGR2GRAY);
-
-            std::vector<cv::Rect> faces;
-            front_face_cascade.detectMultiScale(gray, faces);
             bool out_of_bounds = false;
-            for (auto &face : faces) {
+                for (auto &face : faces) {
                 cv::rectangle(frame, face, cv::Scalar(0, 255, 0));
                 out_of_bounds |= is_out_of_bounds(boundary, face);
             }
-            if (faces.empty()) {
-                side_face_cascade.detectMultiScale(gray, faces);
-                for (auto &face : faces) {
-                    cv::rectangle(frame, face, cv::Scalar(0, 255, 0));
-                    out_of_bounds |= is_out_of_bounds(boundary, face);
-                }
-            }
-            if (faces.empty()) {
-                cv::Mat flipped_frame;
-                cv::flip(gray, flipped_frame, 1);
-                side_face_cascade.detectMultiScale(flipped_frame, faces);
-                for (auto &face : faces) {
-                    if (face.x >= y_axis) {
-                        face.x = frame.cols - face.x;
-                    } else {
-                        face.x = frame.cols - face.x - face.width;
-                    }
-                    cv::rectangle(frame, face, cv::Scalar(0, 255, 0));
-                    out_of_bounds |= is_out_of_bounds(boundary, face);
-                }
-            }
+
             cv::Scalar boundary_colour = out_of_bounds ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
             cv::rectangle(frame, boundary, boundary_colour);
             cv::imshow("Face Detection", frame);

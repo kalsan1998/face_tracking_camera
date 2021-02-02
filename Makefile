@@ -8,6 +8,7 @@ LIBS= \
 	-lopencv_imgproc \
 	-lopencv_objdetect \
 	-lopencv_videoio \
+	-lpthread \
 
 SRC_DIR=./
 OUT_DIR=./out
@@ -22,7 +23,7 @@ OBJ:=$(SRC:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 # $^ evaluates to all prerequisite (e.g. src files and include files)
 
 detection: $(OBJ)
-	$(CXX) $(CXXFLAGS) $^ -o $(OUT_DIR)/detection $(LIBS)
+	$(CXX) $(CXXFLAGS) $^ -o $(OUT_DIR)/main $(LIBS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(DEPS)
 	$(CXX) $(CXXFLAGS) -c $< -o $@

@@ -2,4 +2,4 @@ face_detection/build
 face_detection/opencv-master
 */out/*
 */obj/*
-
+*/snapshots/*

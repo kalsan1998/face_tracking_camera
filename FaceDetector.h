@@ -18,6 +18,7 @@ class FaceDetector {
 
   private:
     cv::CascadeClassifier front_face_cc;
+    cv::CascadeClassifier front_face_cc2;
     cv::CascadeClassifier side_face_cc;
 };
 

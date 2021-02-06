@@ -1,10 +1,12 @@
 #include "FaceDetector.h"
 
-static const std::string FRONT_FACE_CLASSIFIER_DATA = "./classifiers/frontal_face.xml";
-static const std::string SIDE_FACE_CLASSIFIER_DATA = "./classifiers/side_face.xml";
+static const std::string FRONT_FACE_CLASSIFIER_DATA = "classifiers/haarcascade_frontalface_alt.xml";
+static const std::string FRONT_FACE_CLASSIFIER_DATA2 ="classifiers/haarcascade_frontalface_alt2.xml";
+static const std::string SIDE_FACE_CLASSIFIER_DATA = "classifiers/side_face.xml";
 
 FaceDetector::FaceDetector() {
     front_face_cc.load(FRONT_FACE_CLASSIFIER_DATA);
+    front_face_cc2.load(FRONT_FACE_CLASSIFIER_DATA2);
     side_face_cc.load(SIDE_FACE_CLASSIFIER_DATA);
 }
 
@@ -22,6 +24,7 @@ std::vector<cv::Rect> FaceDetector::process_frame(cv::Mat &frame) {
 
     std::vector<cv::Rect> faces;
     get_objects_from_frame(front_face_cc, faces, frame);
+    //get_objects_from_frame(front_face_cc2, faces, frame);
     get_objects_from_frame(side_face_cc, faces, frame);
 
     std::vector<cv::Rect> faces_flipped;

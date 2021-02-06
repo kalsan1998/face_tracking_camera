@@ -14,7 +14,9 @@
 #include "FaceDetector.h"
 #include "MotorController.h"
 
-static const double BOUNDARY_MARGIN = 0.1;
+static const double BOUNDARY_MARGIN = 0.33;
+
+static const double ANGLE_INCREMENT = 10;
 
 void curve_motion(MotorController &controller, double angle) {
     static const double step_size = 0.5; 
@@ -31,11 +33,11 @@ void curve_motion(MotorController &controller, double angle) {
     controller.set_angle(angle);
 } 
 
-void motor_control() {
-    Chip chip;
-    MotorController controller0(&chip, 0);
-    MotorController controller1(&chip, 1);
+void set_relative_angle(MotorController &controller, double relative_angle) {
+    curve_motion(controller, controller.get_angle() + relative_angle);
+}
 
+void motor_control(MotorController *horz_controller, MotorController *vert_controller) {
     std::cout << "Starting Motor Control..." << std::endl;
     while (true) {
         int channel = -1;
@@ -48,9 +50,9 @@ void motor_control() {
         std::cin >> val;
         try {
             if (channel == 0) {
-                curve_motion(controller0, val);
+                curve_motion(*horz_controller, val);
             } else if (channel == 1) {
-                curve_motion(controller1, val);
+                curve_motion(*vert_controller, val);
             }
         } catch (const char *msg) {
             std::cout << msg << std::endl;
@@ -69,65 +71,91 @@ cv::Rect create_boundary(const cv::Mat &frame, double margin) {
     return boundary;
 }
 
-bool is_out_of_bounds(const cv::Rect &boundary, const cv::Rect &object) {
-    return object.x < boundary.x || object.y < boundary.y || (object.x + object.width > boundary.x + boundary.width) || (object.y + object.height > boundary.y + boundary.height);
-}
+int face_following(MotorController *horz_controller, MotorController *vert_controller) {
+    try {
+        cv::Mat frame;
 
-int face_detection() {
-    cv::VideoCapture capture;
-    cv::Mat frame;
+        // TODO: create a frame buffer in another thread
+cv::VideoCapture capture;
+        capture.open(0);
+        capture.set(cv::CAP_PROP_FPS, 5);
 
-    capture.open(0);
-    capture.set(cv::CAP_PROP_FPS, 1);
+        capture >> frame;
+        const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
 
-    capture >> frame;
-    const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
+        FaceDetector face_detector;
+        long long counter = 0;
 
-    FaceDetector face_detector;
+        if (capture.isOpened()) {
+            std::cout << "Starting video... " << std::endl;
+            while (true) {
+                //capture.read(frame);
+                capture >> frame;
+                
+                cv::Mat gray_frame;
+                cv::cvtColor(frame, gray_frame, cv::COLOR_BGR2GRAY);
 
-    if (capture.isOpened()) {
-        std::cout << "Starting video... " << std::endl;
-        while (true) {
-            capture >> frame;
+                std::vector<cv::Rect> faces = face_detector.process_frame(gray_frame);
+                
+                cv::Scalar boundary_colour = cv::Scalar(255, 0, 0);
+                if (!faces.empty()) {
+                    int largest_area = 0;
+                    cv::Rect largest_obj;
 
-            cv::Mat gray_frame;
-            cv::cvtColor(frame, gray_frame, cv::COLOR_BGR2GRAY);
+                    for (auto &face : faces) {
+                        int area = face.width * face.height;
+                        if (area > largest_area) {
+                            largest_area = area;
+                            largest_obj = face;
+                        }
+                    }
+                    cv::rectangle(frame, largest_obj, cv::Scalar(0, 255, 0));
+                    int center_x = largest_obj.x + (largest_obj.width / 2);
+                    int center_y = largest_obj.y + (largest_obj.height / 2);
 
-            std::vector<cv::Rect> faces = face_detector.process_frame(gray_frame);
-            
-            cv::Scalar boundary_colour = cv::Scalar(255, 0, 0);
-            if (!faces.empty()) {
-                int largest_area = 0;
-                cv::Rect largest_object;
-
-                for (auto &face : faces) {
-                    int area = face.width * face.height;
-                    if (area > largest_area) {
-                        largest_area = area;
-                        largest_object = face;
+                    bool top_oob = center_y > boundary.y + boundary.height;
+                    bool bot_oob = center_y < boundary.y;
+                    bool left_oob = center_x < boundary.x;
+                    bool right_oob = center_x > boundary.x + boundary.width;
+                    if (top_oob || bot_oob || left_oob || right_oob) {
+                        if (top_oob) {
+                            set_relative_angle(*vert_controller, ANGLE_INCREMENT);
+                            cv::imwrite("snapshots/" + std::to_string(counter++) + "top.jpg", frame);
+                        } else if (bot_oob) {
+                            cv::imwrite("snapshots/" + std::to_string(counter++) + "bot.jpg", frame);
+                            set_relative_angle(*vert_controller, -1 * ANGLE_INCREMENT);
+                        }
+                        if (left_oob) {
+                            cv::imwrite("snapshots/" + std::to_string(counter++) + "left.jpg", frame);
+                            set_relative_angle(*horz_controller, ANGLE_INCREMENT);
+                        } else if (right_oob) {
+                            cv::imwrite("snapshots/" + std::to_string(counter++) + "right.jpg", frame);
+                            set_relative_angle(*horz_controller, -1 * ANGLE_INCREMENT);
+                        }
+                        boundary_colour = cv::Scalar(0, 0, 255);
                     }
                 }
-                cv::rectangle(frame, largest_object, cv::Scalar(0, 255, 0));
-
-                bool out_of_bounds = is_out_of_bounds(boundary, largest_object);
-                if (out_of_bounds) {
-                    boundary_colour = cv::Scalar(0, 0, 255);
-                }
+                //cv::rectangle(frame, boundary, boundary_colour);
+                //cv::imshow("Face Detection", frame);
+                //cv::waitKey(1); // Use 1ms because it gets limited by the webcam anyways
             }
-            cv::rectangle(frame, boundary, boundary_colour);
-            cv::imshow("Face Detection", frame);
-            cv::waitKey(1); // Use 1ms because it gets limited by the webcam anyways
+        } else {
+            std::cout << "Could not open camera" << std::endl;
         }
-    } else {
-        std::cout << "Could not open camera" << std::endl;
+    } catch (const char *msg) {
+        std::cerr << msg << std::endl;
     }
     return 0;
 }
 
 int main() {
     try {
-        std::thread motor_control_th(motor_control);
-        std::thread face_detection_th(face_detection);
+        Chip chip;
+        MotorController horz_controller(&chip, 0);
+        MotorController vert_controller(&chip, 1);
+
+        std::thread motor_control_th(motor_control, &horz_controller, &vert_controller);
+        std::thread face_detection_th(face_following, &horz_controller, &vert_controller);
 
         motor_control_th.join();
         face_detection_th.detach();

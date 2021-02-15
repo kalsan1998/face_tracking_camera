@@ -1,6 +1,7 @@
 CXX=g++
 CXXFLAGS= \
 	-O2 \
+	$(PRE) \
 
 LIBS= \
 	-lopencv_core \
@@ -34,3 +35,4 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp $(DEPS)
 clean:
 	rm -f $(OBJ_DIR)/*.o
 	rm -f $(OUT_DIR)/*
+	rm -f ./snapshots/*

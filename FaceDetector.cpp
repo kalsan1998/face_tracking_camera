@@ -24,7 +24,7 @@ std::vector<cv::Rect> FaceDetector::process_frame(cv::Mat &frame) {
 
     std::vector<cv::Rect> faces;
     get_objects_from_frame(front_face_cc, faces, frame);
-    //get_objects_from_frame(front_face_cc2, faces, frame);
+    get_objects_from_frame(front_face_cc2, faces, frame);
     get_objects_from_frame(side_face_cc, faces, frame);
 
     std::vector<cv::Rect> faces_flipped;

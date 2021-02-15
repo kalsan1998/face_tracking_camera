@@ -41,7 +41,7 @@ void MotorController::set_angle(double angle) {
     static const int margin = 75;
     int stop_time = min + ((max - min) * angle / 180.0);
 
-    std::cout << "Stop time: " << stop_time << std::endl;
+    //std::cout << "Stop time: " << stop_time << std::endl;
 
     if (stop_time < min + margin || stop_time > max - margin) {
         throw "MotorController: Attempted to set angle out of range";

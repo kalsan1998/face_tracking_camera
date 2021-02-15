@@ -13,6 +13,14 @@
 #include "Chip.h"
 #include "FaceDetector.h"
 #include "MotorController.h"
+ 
+#ifdef DEBUG
+#define DEBUG_SNAPSHOT(filename, frame) \
+    cv::imwrite(filename, frame);
+#else
+#define DEBUG_SNAPSHOT(filename, frame)
+#endif
+
 
 static const double BOUNDARY_MARGIN = 0.33;
 
@@ -37,7 +45,7 @@ void set_relative_angle(MotorController &controller, double relative_angle) {
     curve_motion(controller, controller.get_angle() + relative_angle);
 }
 
-void motor_control(MotorController *horz_controller, MotorController *vert_controller) {
+void manual_motor_control(MotorController *horz_controller, MotorController *vert_controller) {
     std::cout << "Starting Motor Control..." << std::endl;
     while (true) {
         int channel = -1;
@@ -75,21 +83,25 @@ int face_following(MotorController *horz_controller, MotorController *vert_contr
     try {
         cv::Mat frame;
 
-        // TODO: create a frame buffer in another thread
-cv::VideoCapture capture;
+        // TODO: create a frame buffer in another thread ???
+        cv::VideoCapture capture;
+        //capture.open("http://192.168.0.119:8081");
         capture.open(0);
-        capture.set(cv::CAP_PROP_FPS, 5);
-
-        capture >> frame;
-        const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
-
-        FaceDetector face_detector;
-        long long counter = 0;
-
         if (capture.isOpened()) {
+            capture.set(cv::CAP_PROP_FPS, 1);
+            // capture.set(cv::CAP_PROP_BUFFERSIZE, 0);
+
+            capture >> frame;
+            const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
+            
+            const int max_height = frame.rows * 0.75;
+            const int max_width = frame.cols * 0.75;
+
+            FaceDetector face_detector;
+            long long counter = 0;
+
             std::cout << "Starting video... " << std::endl;
             while (true) {
-                //capture.read(frame);
                 capture >> frame;
                 
                 cv::Mat gray_frame;
@@ -104,7 +116,7 @@ cv::VideoCapture capture;
 
                     for (auto &face : faces) {
                         int area = face.width * face.height;
-                        if (area > largest_area) {
+                        if (area > largest_area && face.width < max_width && face.height < max_height) {
                             largest_area = area;
                             largest_obj = face;
                         }
@@ -119,17 +131,17 @@ cv::VideoCapture capture;
                     bool right_oob = center_x > boundary.x + boundary.width;
                     if (top_oob || bot_oob || left_oob || right_oob) {
                         if (top_oob) {
+                            DEBUG_SNAPSHOT("snapshots/" + std::to_string(counter++) + "top.jpg", frame);
                             set_relative_angle(*vert_controller, ANGLE_INCREMENT);
-                            cv::imwrite("snapshots/" + std::to_string(counter++) + "top.jpg", frame);
                         } else if (bot_oob) {
-                            cv::imwrite("snapshots/" + std::to_string(counter++) + "bot.jpg", frame);
+                            DEBUG_SNAPSHOT("snapshots/" + std::to_string(counter++) + "bot.jpg", frame);
                             set_relative_angle(*vert_controller, -1 * ANGLE_INCREMENT);
                         }
                         if (left_oob) {
-                            cv::imwrite("snapshots/" + std::to_string(counter++) + "left.jpg", frame);
+                            DEBUG_SNAPSHOT("snapshots/" + std::to_string(counter++) + "left.jpg", frame);
                             set_relative_angle(*horz_controller, ANGLE_INCREMENT);
                         } else if (right_oob) {
-                            cv::imwrite("snapshots/" + std::to_string(counter++) + "right.jpg", frame);
+                            DEBUG_SNAPSHOT("snapshots/" + std::to_string(counter++) + "right.jpg", frame);
                             set_relative_angle(*horz_controller, -1 * ANGLE_INCREMENT);
                         }
                         boundary_colour = cv::Scalar(0, 0, 255);
@@ -154,7 +166,7 @@ int main() {
         MotorController horz_controller(&chip, 0);
         MotorController vert_controller(&chip, 1);
 
-        std::thread motor_control_th(motor_control, &horz_controller, &vert_controller);
+        std::thread motor_control_th(manual_motor_control, &horz_controller, &vert_controller);
         std::thread face_detection_th(face_following, &horz_controller, &vert_controller);
 
         motor_control_th.join();

@@ -13,6 +13,7 @@
 #include "Chip.h"
 #include "FaceDetector.h"
 #include "MotorController.h"
+#include "VideoOutput.h"
  
 #ifdef DEBUG
 #define DEBUG_SNAPSHOT(filename, frame) \
@@ -26,7 +27,18 @@ static const double BOUNDARY_MARGIN = 0.33;
 
 static const double ANGLE_INCREMENT = 10;
 
+#ifdef TEST
+#include <opencv2/opencv.hpp>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <linux/videodev2.h>
+
+#define VIDEO_OUT  "/dev/video3"
+#endif
+
 void curve_motion(MotorController &controller, double angle) {
+    std::cout << "Moving motor" << std::endl;
     static const double step_size = 0.5; 
     double curr_angle = controller.get_angle();
     double steps_needed = (angle - curr_angle) / step_size;
@@ -81,27 +93,29 @@ cv::Rect create_boundary(const cv::Mat &frame, double margin) {
 
 int face_following(MotorController *horz_controller, MotorController *vert_controller) {
     try {
-        cv::Mat frame;
+        cv::Mat init_frame;
 
         // TODO: create a frame buffer in another thread ???
         cv::VideoCapture capture;
-        //capture.open("http://192.168.0.119:8081");
         capture.open(0);
         if (capture.isOpened()) {
             capture.set(cv::CAP_PROP_FPS, 1);
             // capture.set(cv::CAP_PROP_BUFFERSIZE, 0);
+            capture >> init_frame;
 
-            capture >> frame;
-            const cv::Rect boundary = create_boundary(frame, BOUNDARY_MARGIN);
+            VideoOutput video_out(init_frame.cols, init_frame.rows);
+
+            const cv::Rect boundary = create_boundary(init_frame, BOUNDARY_MARGIN);
             
-            const int max_height = frame.rows * 0.75;
-            const int max_width = frame.cols * 0.75;
+            const int max_height = init_frame.rows * 0.75;
+            const int max_width = init_frame.cols * 0.75;
 
             FaceDetector face_detector;
             long long counter = 0;
 
             std::cout << "Starting video... " << std::endl;
             while (true) {
+                cv::Mat frame;
                 capture >> frame;
                 
                 cv::Mat gray_frame;
@@ -147,6 +161,10 @@ int face_following(MotorController *horz_controller, MotorController *vert_contr
                         boundary_colour = cv::Scalar(0, 0, 255);
                     }
                 }
+
+                cv::Mat rgb_frame;
+                cv::cvtColor(frame, rgb_frame, cv::COLOR_BGR2RGB);
+                video_out.write_video(rgb_frame);
                 //cv::rectangle(frame, boundary, boundary_colour);
                 //cv::imshow("Face Detection", frame);
                 //cv::waitKey(1); // Use 1ms because it gets limited by the webcam anyways
@@ -166,11 +184,11 @@ int main() {
         MotorController horz_controller(&chip, 0);
         MotorController vert_controller(&chip, 1);
 
-        std::thread motor_control_th(manual_motor_control, &horz_controller, &vert_controller);
+        //std::thread motor_control_th(manual_motor_control, &horz_controller, &vert_controller);
         std::thread face_detection_th(face_following, &horz_controller, &vert_controller);
 
-        motor_control_th.join();
-        face_detection_th.detach();
+        //motor_control_th.join();
+        face_detection_th.join();
     } catch (const char *msg) {
         std::cerr << msg << std::endl;
         return -1;
